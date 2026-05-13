@@ -1,0 +1,22 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Large data files
+backend/uploads/
+output/
+
+# GRD binary files
+*.GRD
+*.grd
+
+# Environment
+.env
+venv/
+.venv/
+
+# Unused files
+backend/ollama_client.py
+backend/narmada_context.py
+try.py
