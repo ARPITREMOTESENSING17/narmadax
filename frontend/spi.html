@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IMDTools — SPI Calculator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg:       #0b0f1a;
+      --surface:  #111827;
+      --border:   #1e2d40;
+      --text:     #e2e8f0;
+      --muted:    #64748b;
+      --accent-s: #3b82f6;   /* Standard — blue */
+      --accent-a: #10b981;   /* AI — green */
+      --font-h:   'Syne', sans-serif;
+      --font-m:   'JetBrains Mono', monospace;
+
+      /* SPI colors */
+      --c-ew:  #0a1f6e;
+      --c-sw:  #1565C0;
+      --c-mw:  #42A5F5;
+      --c-nn:  #66BB6A;
+      --c-md:  #FDD835;
+      --c-sd:  #EF6C00;
+      --c-ed:  #B71C1C;
+    }
+
+    * { margin:0; padding:0; box-sizing:border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-m);
+      font-size: 13px;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    .header {
+      padding: 18px 32px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .back-btn {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 12px;
+      letter-spacing: .05em;
+    }
+    .back-btn:hover { color: var(--text); }
+    .header-title {
+      font-family: var(--font-h);
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .header-title span { color: var(--accent-s); }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      padding: 0 32px;
+    }
+    .tab {
+      padding: 14px 24px;
+      cursor: pointer;
+      font-family: var(--font-h);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: .05em;
+      color: var(--muted);
+      border-bottom: 2px solid transparent;
+      transition: all .2s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active-standard {
+      color: var(--accent-s);
+      border-bottom-color: var(--accent-s);
+    }
+    .tab.active-ai {
+      color: var(--accent-a);
+      border-bottom-color: var(--accent-a);
+    }
+    .tab-badge {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #10b98122;
+      color: var(--accent-a);
+    }
+
+    /* ── Layout ── */
+    .content { display: none; padding: 28px 32px; max-width: 1400px; }
+    .content.active { display: block; }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .card-title {
+      font-family: var(--font-h);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    /* ── Form controls ── */
+    label {
+      display: block;
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: .05em;
+      margin-bottom: 6px;
+      margin-top: 14px;
+    }
+    label:first-child { margin-top: 0; }
+
+    select, input[type="number"], input[type="text"] {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: var(--font-m);
+      font-size: 13px;
+      padding: 8px 12px;
+      outline: none;
+      transition: border-color .2s;
+    }
+    select:focus, input:focus {
+      border-color: var(--accent-s);
+    }
+
+    /* SPI scale buttons */
+    .scale-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 6px;
+    }
+    .scale-btn {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+      font-family: var(--font-m);
+      font-size: 12px;
+      padding: 8px 4px;
+      cursor: pointer;
+      text-align: center;
+      transition: all .15s;
+    }
+    .scale-btn:hover { border-color: var(--accent-s); color: var(--text); }
+    .scale-btn.active {
+      background: var(--accent-s);
+      border-color: var(--accent-s);
+      color: #fff;
+      font-weight: 600;
+    }
+    .scale-btn.active-ai-btn {
+      background: var(--accent-a);
+      border-color: var(--accent-a);
+      color: #fff;
+    }
+
+    /* Upload zone */
+    .upload-zone {
+      border: 1.5px dashed var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s;
+    }
+    .upload-zone:hover { border-color: var(--accent-s); }
+    .upload-zone input { display: none; }
+    .upload-icon { font-size: 24px; margin-bottom: 8px; }
+    .upload-label { font-size: 12px; color: var(--muted); }
+    .upload-name {
+      font-size: 11px;
+      color: var(--accent-s);
+      margin-top: 6px;
+      word-break: break-all;
+    }
+
+    /* Buttons */
+    .btn {
+      width: 100%;
+      padding: 11px;
+      border: none;
+      border-radius: 7px;
+      font-family: var(--font-h);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .05em;
+      cursor: pointer;
+      transition: opacity .2s;
+      margin-top: 14px;
+    }
+    .btn:hover { opacity: .85; }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-standard { background: var(--accent-s); color: #fff; }
+    .btn-ai       { background: var(--accent-a); color: #fff; }
+    .btn-outline  {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    /* ── Stats grid ── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .stat-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .stat-label {
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .stat-value {
+      font-family: var(--font-h);
+      font-size: 22px;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+    .stat-sub {
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    /* ── Chart ── */
+    .chart-wrap {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+      position: relative;
+      height: 280px;
+    }
+
+    /* ── Drought legend ── */
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .legend-dot {
+      width: 10px; height: 10px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    /* ── Decade table ── */
+    .decade-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .decade-table th {
+      text-align: left;
+      padding: 8px 12px;
+      font-size: 10px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+    .decade-table td {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border)44;
+    }
+    .freq-bar {
+      height: 6px;
+      border-radius: 3px;
+      background: var(--accent-s);
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+
+    /* ── AI Section ── */
+    .ai-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      margin-bottom: 16px;
+    }
+    .ai-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #ef4444;
+    }
+    .ai-dot.online { background: var(--accent-a); }
+
+    .analysis-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .analysis-btn {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      cursor: pointer;
+      transition: border-color .2s;
+      text-align: left;
+    }
+    .analysis-btn:hover { border-color: var(--accent-a); }
+    .analysis-btn.selected { border-color: var(--accent-a); background: #10b98112; }
+    .analysis-icon { font-size: 18px; margin-bottom: 4px; }
+    .analysis-label {
+      font-family: var(--font-h);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .analysis-desc { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+    /* AI output */
+    .ai-output {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      min-height: 120px;
+      font-size: 13px;
+      line-height: 1.7;
+      color: var(--text);
+      white-space: pre-wrap;
+      position: relative;
+    }
+    .ai-output.streaming::after {
+      content: '▋';
+      animation: blink .7s step-end infinite;
+      color: var(--accent-a);
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+    .ai-placeholder { color: var(--muted); font-style: italic; }
+
+    /* Q&A */
+    .qa-input-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .qa-input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: var(--font-m);
+      font-size: 13px;
+      padding: 8px 12px;
+      outline: none;
+    }
+    .qa-input:focus { border-color: var(--accent-a); }
+    .qa-send {
+      background: var(--accent-a);
+      border: none;
+      border-radius: 6px;
+      color: #fff;
+      font-family: var(--font-h);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 8px 16px;
+      cursor: pointer;
+    }
+
+    /* ── Status bar ── */
+    .status {
+      font-size: 12px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      margin-top: 10px;
+      display: none;
+    }
+    .status.info    { background: #1e3a5f; color: #93c5fd; display: block; }
+    .status.success { background: #064e3b; color: #6ee7b7; display: block; }
+    .status.error   { background: #450a0a; color: #fca5a5; display: block; }
+    .status.warning { background: #451a03; color: #fcd34d; display: block; }
+
+    /* ── Export bar ── */
+    .export-bar {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .export-bar .btn {
+      width: auto;
+      padding: 7px 16px;
+      font-size: 11px;
+      margin-top: 0;
+    }
+
+    /* ── Spinner ── */
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent-s);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Empty state ── */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--muted);
+    }
+    .empty-icon { font-size: 40px; margin-bottom: 12px; }
+    .empty-text { font-family: var(--font-h); font-size: 14px; }
+    .empty-sub  { font-size: 12px; margin-top: 6px; }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .two-col { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<div class="header">
+  <a href="/" class="back-btn">← IMDTools</a>
+  <div class="header-title">SPI <span>Calculator</span></div>
+</div>
+
+<!-- ── Tabs ── -->
+<div class="tabs">
+  <div class="tab active-standard" id="tab-standard" onclick="switchTab('standard')">
+    📊 Standard SPI
+  </div>
+  <div class="tab" id="tab-ai" onclick="switchTab('ai')">
+    🤖 AI Analysis
+    <span class="tab-badge">Narmada Basin</span>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     STANDARD SPI TAB
+══════════════════════════════════════════════════════════ -->
+<div class="content active" id="content-standard">
+  <div class="two-col">
+
+    <!-- Left panel -->
+    <div>
+      <!-- Upload -->
+      <div class="card">
+        <div class="card-title">Input Data</div>
+
+        <label>Rainfall CSV (from IMDTools Reader)</label>
+        <div class="upload-zone" onclick="document.getElementById('csvFile').click()">
+          <div class="upload-icon">📂</div>
+          <div class="upload-label">Click to upload CSV</div>
+          <div class="upload-name" id="fileName">No file selected</div>
+          <input type="file" id="csvFile" accept=".csv"
+                 onchange="onFileSelect(this)">
+        </div>
+
+        <label>SPI Timescale</label>
+        <div class="scale-grid" id="scaleGrid">
+          <div class="scale-btn" onclick="setScale(1,this)">1</div>
+          <div class="scale-btn" onclick="setScale(3,this)">3</div>
+          <div class="scale-btn active" onclick="setScale(6,this)">6</div>
+          <div class="scale-btn" onclick="setScale(9,this)">9</div>
+          <div class="scale-btn" onclick="setScale(12,this)">12</div>
+          <div class="scale-btn" onclick="setScale(24,this)">24</div>
+        </div>
+        <div id="scaleHint" style="font-size:11px;color:var(--muted);margin-top:6px;">
+          SPI-6: Seasonal to medium-term moisture
+        </div>
+
+        <label>Reference Period</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div>
+            <input type="number" id="refStart" value="1951"
+                   min="1901" max="2020" placeholder="From">
+          </div>
+          <div>
+            <input type="number" id="refEnd" value="2010"
+                   min="1901" max="2024" placeholder="To">
+          </div>
+        </div>
+
+        <label>Region</label>
+        <select id="basinFilter">
+          <option value="all">All India (full CSV)</option>
+          <option value="narmada">Narmada Basin only</option>
+        </select>
+
+        <label>Single Point (optional)</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <input type="number" id="pointLat" placeholder="Latitude"
+                 step="0.25" min="7" max="38">
+          <input type="number" id="pointLon" placeholder="Longitude"
+                 step="0.25" min="67" max="98">
+        </div>
+
+        <button class="btn btn-standard" id="calcBtn"
+                onclick="calculateSPI()">
+          Calculate SPI
+        </button>
+
+        <div id="statusStd" class="status"></div>
+      </div>
+
+      <!-- Legend -->
+      <div class="card">
+        <div class="card-title">Drought Categories (WMO)</div>
+        <div class="legend">
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#B71C1C"></div>Extreme Drought (≤ -2.0)
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#EF6C00"></div>Severe (-2.0 to -1.5)
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#FDD835"></div>Moderate (-1.5 to -1.0)
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#66BB6A"></div>Near Normal
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#42A5F5"></div>Moderately Wet
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#1565C0"></div>Severely Wet
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#0a1f6e"></div>Extremely Wet (≥ 2.0)
+          </div>
+        </div>
+        <div style="font-size:10px;color:var(--muted);line-height:1.5">
+          Source: McKee et al. (1993) / WMO-No.1090 (2012)
+        </div>
+      </div>
+    </div>
+
+    <!-- Right panel -->
+    <div id="resultsPanel">
+      <div class="empty-state">
+        <div class="empty-icon">📊</div>
+        <div class="empty-text">Upload a rainfall CSV and calculate SPI</div>
+        <div class="empty-sub">
+          Use the Rainfall Reader to export daily data first,<br>
+          then upload it here for SPI analysis
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     AI SPI TAB — Narmada Basin Only
+══════════════════════════════════════════════════════════ -->
+<div class="content" id="content-ai">
+  <div class="two-col">
+
+    <!-- Left panel -->
+    <div>
+      <div class="card">
+        <div class="card-title">Ollama Status</div>
+        <div class="ai-status">
+          <div class="ai-dot" id="aiDot"></div>
+          <span id="aiStatusText">Checking...</span>
+        </div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.6">
+          AI analysis requires Ollama running locally.<br>
+          Install: <span style="color:var(--accent-a)">ollama.com</span><br>
+          Then run: <span style="color:var(--accent-a)">ollama pull llama3.1</span>
+        </div>
+
+        <label>Model</label>
+        <select id="aiModel">
+          <option value="llama3.1:latest">llama3.1 (recommended)</option>
+          <option value="mistral">mistral</option>
+          <option value="llama3.1:70b">llama3.1:70b (needs 32GB RAM)</option>
+        </select>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Narmada Basin SPI</div>
+
+        <label>Rainfall CSV (Narmada Basin)</label>
+        <div class="upload-zone" onclick="document.getElementById('csvFileAI').click()">
+          <div class="upload-icon">🌊</div>
+          <div class="upload-label">Upload Rainfall CSV</div>
+          <div class="upload-name" id="fileNameAI">No file selected</div>
+          <input type="file" id="csvFileAI" accept=".csv"
+                 onchange="onFileSelectAI(this)">
+        </div>
+
+        <label>SPI Timescale</label>
+        <div class="scale-grid" id="scaleGridAI">
+          <div class="scale-btn" onclick="setScaleAI(1,this)">1</div>
+          <div class="scale-btn" onclick="setScaleAI(3,this)">3</div>
+          <div class="scale-btn" onclick="setScaleAI(6,this)">6</div>
+          <div class="scale-btn" onclick="setScaleAI(9,this)">9</div>
+          <div class="scale-btn active active-ai-btn" onclick="setScaleAI(12,this)">12</div>
+          <div class="scale-btn" onclick="setScaleAI(24,this)">24</div>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;">
+          SPI-12 recommended for GDE/groundwater analysis (PhD)
+        </div>
+
+        <button class="btn btn-ai" id="calcBtnAI"
+                onclick="calculateSPIAI()">
+          Calculate + Analyse
+        </button>
+        <div id="statusAI" class="status"></div>
+      </div>
+
+      <!-- Analysis types -->
+      <div class="card">
+        <div class="card-title">AI Analysis Type</div>
+        <div class="analysis-grid">
+          <div class="analysis-btn selected" id="btn-interpretation"
+               onclick="selectAnalysis('interpretation', this)">
+            <div class="analysis-icon">📝</div>
+            <div class="analysis-label">Interpretation</div>
+            <div class="analysis-desc">Plain English explanation of results</div>
+          </div>
+          <div class="analysis-btn" id="btn-patterns"
+               onclick="selectAnalysis('patterns', this)">
+            <div class="analysis-icon">🔍</div>
+            <div class="analysis-label">Pattern Detection</div>
+            <div class="analysis-desc">Cycles, trends, anomalies</div>
+          </div>
+          <div class="analysis-btn" id="btn-gde_impact"
+               onclick="selectAnalysis('gde_impact', this)">
+            <div class="analysis-icon">🌿</div>
+            <div class="analysis-label">GDE Impact</div>
+            <div class="analysis-desc">Groundwater ecosystem stress (PhD)</div>
+          </div>
+          <div class="analysis-btn" id="btn-qa"
+               onclick="selectAnalysis('qa', this)">
+            <div class="analysis-icon">💬</div>
+            <div class="analysis-label">Ask a Question</div>
+            <div class="analysis-desc">Natural language Q&A</div>
+          </div>
+        </div>
+
+        <button class="btn btn-ai" id="analyseBtn"
+                onclick="runAIAnalysis()" disabled>
+          Run AI Analysis
+        </button>
+      </div>
+    </div>
+
+    <!-- Right panel AI -->
+    <div>
+      <!-- SPI chart (same as standard) -->
+      <div id="aiResultsTop">
+        <div class="empty-state">
+          <div class="empty-icon">🤖</div>
+          <div class="empty-text">Narmada Basin AI-powered drought analysis</div>
+          <div class="empty-sub">
+            Upload rainfall CSV → Calculate SPI →<br>
+            Select analysis type → Run AI Analysis
+          </div>
+        </div>
+      </div>
+
+      <!-- AI Output -->
+      <div class="card" id="aiOutputCard" style="display:none">
+        <div class="card-title" id="aiOutputTitle">AI Interpretation</div>
+        <div class="ai-output" id="aiOutput">
+          <span class="ai-placeholder">AI analysis will appear here...</span>
+        </div>
+
+        <!-- Q&A input -->
+        <div id="qaSection" style="display:none">
+          <div class="qa-input-row">
+            <input class="qa-input" id="qaInput"
+                   placeholder="Ask about your Narmada Basin SPI results..."
+                   onkeydown="if(event.key==='Enter') sendQuestion()">
+            <button class="qa-send" onclick="sendQuestion()">Ask →</button>
+          </div>
+        </div>
+
+        <div class="export-bar" id="aiExportBar" style="display:none">
+          <button class="btn btn-outline" onclick="copyAIOutput()">
+            Copy Text
+          </button>
+          <button class="btn btn-outline" onclick="downloadAIReport()">
+            Download Report
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="js/spi.js"></script>
+</body>
+</html>

@@ -1,0 +1,166 @@
+"""
+routes/mintemp.py
+All API routes for IMD Min Temperature (.GRD 1.0 degree) reader.
+Registered in app.py as mintemp_bp.
+
+File naming:  Mintemp_MinT_YYYY  or  Mintemp_MinT_YYYY.GRD
+Grid:         31 x 31 = 961 cells/day
+Resolution:   1.0 degree
+"""
+
+import os
+from datetime import date, timedelta
+
+from flask import Blueprint, request, jsonify, Response
+from shared import UPLOAD_FOLDER, get_start_date
+from imd_mintemp_parser import IMDMinTempParser
+
+# ── Blueprint ─────────────────────────────────────────────────────────
+mintemp_bp = Blueprint('mintemp', __name__)
+
+# ── Parser cache ──────────────────────────────────────────────────────
+_mintemp_cache = {}
+
+def _get_parser(filepath: str) -> IMDMinTempParser:
+    if filepath not in _mintemp_cache:
+        parser = IMDMinTempParser(filepath)
+        parser.parse()
+        _mintemp_cache[filepath] = parser
+    return _mintemp_cache[filepath]
+
+def _clear_cache(filepath: str):
+    _mintemp_cache.pop(filepath, None)
+
+def _resolve(file_id: str) -> str:
+    """
+    Build full filepath from file_id.
+    Handles both:
+      - Mintemp_MinT_2023.GRD  (with extension)
+      - Mintemp_MinT_2023      (no extension)
+    """
+    # Try exact match first (file_id already has extension)
+    exact = os.path.join(UPLOAD_FOLDER, file_id)
+    if os.path.exists(exact):
+        return exact
+
+    # Try adding extensions
+    for ext in ('.GRD', '.grd'):
+        candidate = exact + ext
+        if os.path.exists(candidate):
+            return candidate
+
+    # Return as-is and let the caller handle missing file
+    return exact
+
+
+# ── Upload ─────────────────────────────────────────────────────────────
+@mintemp_bp.route('/api/mintemp/upload', methods=['POST'])
+def mintemp_upload():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+
+    f = request.files['file']
+    if not f.filename:
+        return jsonify({'error': 'No filename'}), 400
+
+    filename = f.filename          # keep original name including .GRD or no ext
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    f.save(filepath)
+    _clear_cache(filepath)
+
+    try:
+        parser = _get_parser(filepath)
+        base   = date.fromisoformat(parser.start_date)
+        end    = base + timedelta(days=parser.n_days - 1)
+
+        return jsonify({
+            'file_id':    filename,            # full filename used as key
+            'file_type':  'imd_mintemp',
+            'n_days':     parser.n_days,
+            'start_date': parser.start_date,
+            'end_date':   end.isoformat(),
+            'metadata': {
+                'ncols':     parser.ncols,
+                'nrows':     parser.nrows,
+                'cellsize':  parser.cellsize,
+                'xllcorner': parser.xllcorner,
+                'yllcorner': parser.yllcorner,
+            },
+            'statistics_first_day': parser.get_statistics(day_idx=0),
+            'extent': parser.extent,
+        }), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ── Export all days ────────────────────────────────────────────────────
+@mintemp_bp.route('/api/mintemp/export/<path:file_id>/csv_all', methods=['GET'])
+def mintemp_export_csv_all(file_id):
+    filepath = _resolve(file_id)
+    try:
+        parser = _get_parser(filepath)
+        base   = date.fromisoformat(parser.start_date)
+
+        def generate():
+            yield 'day_index,date,latitude,longitude,mintemp_c\n'
+            for di in range(parser.n_days):
+                d = (base + timedelta(days=di)).isoformat()
+                for lat, lon, val in parser.iter_day_rows(di):
+                    yield f'{di},{d},{lat:.4f},{lon:.4f},{val:.4f}\n'
+
+        return Response(generate(), mimetype='text/csv',
+            headers={'Content-Disposition':
+                     f'attachment; filename={file_id}_all_days.csv'})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ── Export date range ──────────────────────────────────────────────────
+@mintemp_bp.route('/api/mintemp/export/<path:file_id>/csv_range', methods=['GET'])
+def mintemp_export_csv_range(file_id):
+    from_day = int(request.args.get('from', 0))
+    to_day   = int(request.args.get('to', 0))
+    filepath = _resolve(file_id)
+
+    try:
+        parser = _get_parser(filepath)
+        base   = date.fromisoformat(parser.start_date)
+
+        def generate():
+            yield 'day_index,date,latitude,longitude,mintemp_c\n'
+            for di in range(from_day, to_day + 1):
+                d = (base + timedelta(days=di)).isoformat()
+                for lat, lon, val in parser.iter_day_rows(di):
+                    yield f'{di},{d},{lat:.4f},{lon:.4f},{val:.4f}\n'
+
+        fd    = (base + timedelta(days=from_day)).isoformat()
+        td    = (base + timedelta(days=to_day)).isoformat()
+        fname = f'{file_id}_{fd}_to_{td}.csv'
+
+        return Response(generate(), mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename={fname}'})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ── Time series for a point ────────────────────────────────────────────
+@mintemp_bp.route('/api/mintemp/timeseries/<path:file_id>', methods=['POST'])
+def mintemp_timeseries(file_id):
+    body     = request.get_json()
+    lon      = body.get('longitude')
+    lat      = body.get('latitude')
+    from_day = int(body.get('from_day', 0))
+    to_day   = body.get('to_day')
+    filepath = _resolve(file_id)
+
+    try:
+        parser = _get_parser(filepath)
+        to     = int(to_day) if to_day is not None else parser.n_days - 1
+        ts     = parser.get_timeseries(lon, lat, from_day, to)
+        return jsonify({'time_series': ts}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IMDTools — CSV Merger</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:      #0b0f1a;
+      --surface: #111827;
+      --border:  #1e2d40;
+      --text:    #e2e8f0;
+      --muted:   #64748b;
+      --accent:  #8b5cf6;   /* purple — merger theme */
+      --green:   #10b981;
+      --red:     #ef4444;
+      --font-h:  'Syne', sans-serif;
+      --font-m:  'JetBrains Mono', monospace;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-m);
+      font-size: 13px;
+      min-height: 100vh;
+    }
+
+    /* Header */
+    .header {
+      padding: 18px 32px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 16px;
+    }
+    .back-btn { color: var(--muted); text-decoration: none; font-size: 12px; }
+    .back-btn:hover { color: var(--text); }
+    .header-title { font-family: var(--font-h); font-size: 18px; font-weight: 700; }
+    .header-title span { color: var(--accent); }
+
+    /* Layout */
+    .page { padding: 28px 32px; max-width: 1000px; }
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .card-title {
+      font-family: var(--font-h); font-size: 11px; font-weight: 700;
+      letter-spacing: .1em; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 16px;
+    }
+
+    /* ── Drop Zone ── */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 48px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all .2s;
+      position: relative;
+    }
+    .drop-zone:hover,
+    .drop-zone.drag-over {
+      border-color: var(--accent);
+      background: #8b5cf608;
+    }
+    .drop-zone input {
+      position: absolute; inset: 0;
+      opacity: 0; cursor: pointer; width: 100%;
+    }
+    .drop-icon { font-size: 44px; margin-bottom: 12px; }
+    .drop-title {
+      font-family: var(--font-h);
+      font-size: 16px; font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .drop-sub { font-size: 12px; color: var(--muted); line-height: 1.6; }
+    .drop-hint {
+      display: inline-block;
+      margin-top: 12px;
+      font-size: 11px;
+      background: #8b5cf622;
+      color: var(--accent);
+      padding: 4px 12px;
+      border-radius: 20px;
+    }
+
+    /* ── File chips ── */
+    .file-chips {
+      display: flex; flex-wrap: wrap; gap: 8px;
+      margin-top: 16px;
+      min-height: 0;
+    }
+    .chip {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 11px;
+      animation: popIn .2s ease;
+    }
+    @keyframes popIn {
+      from { opacity: 0; transform: scale(.9); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+    .chip-name { color: var(--text); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .chip-size { color: var(--muted); }
+    .chip-remove {
+      color: var(--muted); cursor: pointer; font-size: 14px;
+      line-height: 1; margin-left: 2px;
+    }
+    .chip-remove:hover { color: var(--red); }
+
+    /* File counter */
+    .file-counter {
+      display: flex; justify-content: space-between;
+      align-items: center;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+      font-size: 12px; color: var(--muted);
+    }
+    .counter-val { color: var(--text); font-weight: 600; }
+    .clear-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: var(--muted);
+      font-family: var(--font-m);
+      font-size: 11px; padding: 4px 10px;
+      cursor: pointer;
+    }
+    .clear-btn:hover { border-color: var(--red); color: var(--red); }
+
+    /* ── Merge button ── */
+    .btn-merge {
+      width: 100%;
+      padding: 14px;
+      border: none; border-radius: 8px;
+      background: var(--accent);
+      color: #fff;
+      font-family: var(--font-h);
+      font-size: 15px; font-weight: 800;
+      letter-spacing: .05em;
+      cursor: pointer;
+      transition: opacity .2s;
+      margin-top: 4px;
+    }
+    .btn-merge:hover   { opacity: .85; }
+    .btn-merge:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* Status */
+    .status {
+      font-size: 12px; padding: 10px 14px;
+      border-radius: 6px; margin-top: 12px; display: none;
+    }
+    .status.info    { background: #1e3a5f; color: #93c5fd; display: block; }
+    .status.success { background: #064e3b; color: #6ee7b7; display: block; }
+    .status.error   { background: #450a0a; color: #fca5a5; display: block; }
+    .status.warning { background: #451a03; color: #fcd34d; display: block; }
+
+    /* ── Results ── */
+    .result-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px; margin-bottom: 20px;
+    }
+    .result-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px; padding: 14px;
+    }
+    .result-label {
+      font-size: 10px; color: var(--muted);
+      letter-spacing: .08em; text-transform: uppercase;
+    }
+    .result-val {
+      font-family: var(--font-h);
+      font-size: 22px; font-weight: 700;
+      margin-top: 4px;
+    }
+    .result-sub { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+    /* File log table */
+    .file-table {
+      width: 100%; border-collapse: collapse; font-size: 12px;
+    }
+    .file-table th {
+      text-align: left; padding: 8px 12px;
+      font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+      color: var(--muted); border-bottom: 1px solid var(--border);
+    }
+    .file-table td {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border)44;
+    }
+    .file-table tr:last-child td { border-bottom: none; }
+    .dtype-badge {
+      font-size: 10px; padding: 2px 7px;
+      border-radius: 3px;
+      background: #8b5cf622; color: var(--accent);
+    }
+
+    /* Download button */
+    .btn-download {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--green);
+      border: none; border-radius: 8px;
+      color: #fff;
+      font-family: var(--font-h);
+      font-size: 14px; font-weight: 800;
+      padding: 12px 28px;
+      cursor: pointer;
+      transition: opacity .2s;
+    }
+    .btn-download:hover { opacity: .85; }
+
+    .btn-spi {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: var(--font-h);
+      font-size: 14px; font-weight: 700;
+      padding: 12px 24px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: border-color .2s;
+    }
+    .btn-spi:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* Spinner */
+    .spinner {
+      display: inline-block; width: 14px; height: 14px;
+      border: 2px solid #ffffff44;
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      vertical-align: middle; margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Tips */
+    .tips {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    }
+    .tip {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px; padding: 14px;
+      font-size: 11px; color: var(--muted); line-height: 1.6;
+    }
+    .tip-title {
+      font-family: var(--font-h); font-size: 12px;
+      font-weight: 700; color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    @media (max-width: 700px) {
+      .result-grid { grid-template-columns: repeat(2,1fr); }
+      .tips { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <a href="/" class="back-btn">← IMDTools</a>
+  <div class="header-title">CSV <span>Merger</span></div>
+</div>
+
+<div class="page">
+
+  <!-- ── Upload Card ── -->
+  <div class="card">
+    <div class="card-title">Upload CSV Files</div>
+
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="fileInput" multiple accept=".csv"
+             onchange="onFilesSelected(this.files)">
+      <div class="drop-icon">📂</div>
+      <div class="drop-title">Drag & Drop CSV files here</div>
+      <div class="drop-sub">
+        Or click to browse and select multiple files<br>
+        Supports Rainfall, MinTemp, MaxTemp exports from IMDTools
+      </div>
+      <span class="drop-hint">merge multiple CSV files at once</span>
+    </div>
+
+    <!-- File chips -->
+    <div class="file-chips" id="fileChips"></div>
+
+    <!-- Counter -->
+    <div class="file-counter" id="fileCounter" style="display:none">
+      <span>
+        <span class="counter-val" id="fileCount">0</span> files selected
+        · <span class="counter-val" id="totalSize">0 MB</span> total
+      </span>
+      <button class="clear-btn" onclick="clearFiles()">Clear All</button>
+    </div>
+
+    <button class="btn-merge" id="mergeBtn"
+            onclick="mergeFiles()" disabled>
+      Merge CSV Files
+    </button>
+    <div id="statusMsg" class="status"></div>
+  </div>
+
+  <!-- ── Results (hidden until merge) ── -->
+  <div id="resultsSection" style="display:none">
+
+    <div class="card">
+      <div class="card-title">Merge Results</div>
+
+      <div class="result-grid">
+        <div class="result-card">
+          <div class="result-label">Files Merged</div>
+          <div class="result-val" id="resMerged" style="color:var(--accent)">—</div>
+          <div class="result-sub">CSV files combined</div>
+        </div>
+        <div class="result-card">
+          <div class="result-label">Total Rows</div>
+          <div class="result-val" id="resRows" style="color:#10b981">—</div>
+          <div class="result-sub">after deduplication</div>
+        </div>
+        <div class="result-card">
+          <div class="result-label">Date Range</div>
+          <div class="result-val" id="resYears" style="color:#f59e0b">—</div>
+          <div class="result-sub" id="resDateRange">years of data</div>
+        </div>
+        <div class="result-card">
+          <div class="result-label">Duplicates Removed</div>
+          <div class="result-val" id="resDupes" style="color:var(--muted)">—</div>
+          <div class="result-sub">rows removed</div>
+        </div>
+      </div>
+
+      <!-- Extra stats -->
+      <div style="display:flex;gap:20px;font-size:12px;color:var(--muted);
+                  margin-bottom:20px;flex-wrap:wrap">
+        <span>📍 Grid points: <span id="resPoints" style="color:var(--text)">—</span></span>
+        <span>📊 Data type: <span id="resDtype"  style="color:var(--text)">—</span></span>
+        <span id="resValueStats"></span>
+      </div>
+
+      <!-- File breakdown table -->
+      <div style="margin-bottom:20px">
+        <div style="font-size:11px;color:var(--muted);
+                    letter-spacing:.08em;text-transform:uppercase;
+                    margin-bottom:10px">File Breakdown</div>
+        <table class="file-table" id="fileTable">
+          <thead>
+            <tr>
+              <th>Filename</th>
+              <th>Rows</th>
+              <th>Type</th>
+            </tr>
+          </thead>
+          <tbody id="fileTableBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Download buttons -->
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        <button class="btn-download" id="downloadBtn" onclick="downloadMerged()">
+          ⬇ Download Merged CSV
+        </button>
+        <a href="/spi" class="btn-spi">
+          📊 Open in SPI Calculator →
+        </a>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Tips ── -->
+  <div class="card">
+    <div class="card-title">How to Use</div>
+    <div class="tips">
+      <div class="tip">
+        <div class="tip-title">📋 Step 1 — Export from Readers</div>
+        Use Rainfall Reader, MinTemp Reader, or MaxTemp Reader
+        to export CSV for each year. Each export = one CSV file.
+      </div>
+      <div class="tip">
+        <div class="tip-title">📂 Step 2 — Upload All at Once</div>
+        Drag all your year CSVs into the drop zone above.
+        Mix of 1951–2024 = 74 files. Upload all together.
+      </div>
+      <div class="tip">
+        <div class="tip-title">🔀 Step 3 — Merge</div>
+        Click Merge. Duplicates removed automatically.
+        Sorted by date. One clean combined CSV ready.
+      </div>
+      <div class="tip">
+        <div class="tip-title">📊 Step 4 — Calculate SPI</div>
+        Download merged CSV and upload it to SPI Calculator.
+        30+ years needed for reliable WMO-standard SPI.
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────
+let selectedFiles = [];
+let currentCacheKey = null;
+
+// ── Drag & Drop ────────────────────────────────────────────────────────
+const dropZone = document.getElementById('dropZone');
+
+dropZone.addEventListener('dragover', e => {
+  e.preventDefault();
+  dropZone.classList.add('drag-over');
+});
+dropZone.addEventListener('dragleave', () => {
+  dropZone.classList.remove('drag-over');
+});
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const files = Array.from(e.dataTransfer.files)
+    .filter(f => f.name.endsWith('.csv'));
+  addFiles(files);
+});
+
+function onFilesSelected(fileList) {
+  addFiles(Array.from(fileList));
+}
+
+function addFiles(newFiles) {
+  // Avoid duplicates by name
+  const existing = new Set(selectedFiles.map(f => f.name));
+  const toAdd = newFiles.filter(f => !existing.has(f.name));
+  selectedFiles = [...selectedFiles, ...toAdd];
+  renderChips();
+}
+
+function clearFiles() {
+  selectedFiles = [];
+  document.getElementById('fileInput').value = '';
+  renderChips();
+  document.getElementById('resultsSection').style.display = 'none';
+  clearStatus();
+}
+
+function removeFile(idx) {
+  selectedFiles.splice(idx, 1);
+  renderChips();
+}
+
+function renderChips() {
+  const container = document.getElementById('fileChips');
+  const counter   = document.getElementById('fileCounter');
+  const btn       = document.getElementById('mergeBtn');
+
+  if (selectedFiles.length === 0) {
+    container.innerHTML = '';
+    counter.style.display = 'none';
+    btn.disabled = true;
+    return;
+  }
+
+  let html = '';
+  selectedFiles.forEach((f, i) => {
+    const size = f.size > 1024*1024
+      ? (f.size/1024/1024).toFixed(1) + ' MB'
+      : (f.size/1024).toFixed(0) + ' KB';
+    html += `
+      <div class="chip">
+        <span class="chip-name" title="${f.name}">${f.name}</span>
+        <span class="chip-size">${size}</span>
+        <span class="chip-remove" onclick="removeFile(${i})">×</span>
+      </div>
+    `;
+  });
+  container.innerHTML = html;
+
+  // Update counter
+  const totalBytes = selectedFiles.reduce((s, f) => s + f.size, 0);
+  const totalMB    = (totalBytes / 1024 / 1024).toFixed(1);
+  document.getElementById('fileCount').textContent = selectedFiles.length;
+  document.getElementById('totalSize').textContent = totalMB + ' MB';
+  counter.style.display = 'flex';
+
+  btn.disabled = selectedFiles.length < 2;
+}
+
+// ── Merge ──────────────────────────────────────────────────────────────
+async function mergeFiles() {
+  if (selectedFiles.length < 2) return;
+
+  const btn = document.getElementById('mergeBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Merging...';
+  showStatus(`Merging ${selectedFiles.length} files...`, 'info');
+
+  const formData = new FormData();
+  selectedFiles.forEach(f => formData.append('files', f));
+
+  try {
+    const res  = await fetch('/api/merger/merge', {
+      method: 'POST', body: formData,
+      headers: { 'ngrok-skip-browser-warning': 'true' }
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      showStatus(`❌ ${data.error}`, 'error');
+      return;
+    }
+
+    currentCacheKey = data.cache_key;
+    renderResults(data);
+    showStatus(
+      `✅ Merged successfully! ${data.rows_total.toLocaleString()} rows · ${data.n_years} years of data`,
+      'success'
+    );
+
+  } catch (err) {
+    showStatus(`❌ Error: ${err.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Merge CSV Files';
+  }
+}
+
+function renderResults(data) {
+  document.getElementById('resMerged').textContent  = data.files_merged;
+  document.getElementById('resRows').textContent    = data.rows_total.toLocaleString();
+  document.getElementById('resYears').textContent   = data.n_years;
+  document.getElementById('resDupes').textContent   = data.dupes_removed.toLocaleString();
+  document.getElementById('resDateRange').textContent =
+    `${data.date_min} → ${data.date_max}`;
+  document.getElementById('resPoints').textContent  = data.n_points.toLocaleString();
+  document.getElementById('resDtype').textContent   = data.dtype.toUpperCase();
+
+  // Value stats
+  if (data.value_info && data.value_col) {
+    const v = data.value_info;
+    document.getElementById('resValueStats').innerHTML =
+      `📈 ${data.value_col}: min <span style="color:var(--text)">${v.min}</span> · 
+       mean <span style="color:var(--text)">${v.mean}</span> · 
+       max <span style="color:var(--text)">${v.max}</span>`;
+  }
+
+  // File table
+  let tbody = '';
+  (data.file_info || []).forEach(f => {
+    tbody += `
+      <tr>
+        <td>${f.filename}</td>
+        <td style="color:var(--muted)">${f.rows.toLocaleString()}</td>
+        <td><span class="dtype-badge">${f.dtype}</span></td>
+      </tr>`;
+  });
+  document.getElementById('fileTableBody').innerHTML = tbody;
+
+  document.getElementById('resultsSection').style.display = 'block';
+  document.getElementById('resultsSection')
+    .scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function downloadMerged() {
+  if (!currentCacheKey) return;
+  const a = document.createElement('a');
+  a.href = `/api/merger/download/${currentCacheKey}`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function showStatus(msg, type) {
+  const el = document.getElementById('statusMsg');
+  el.className = `status ${type}`;
+  el.innerHTML = msg;
+}
+function clearStatus() {
+  const el = document.getElementById('statusMsg');
+  el.className = 'status';
+  el.textContent = '';
+}
+</script>
+</body>
+</html>

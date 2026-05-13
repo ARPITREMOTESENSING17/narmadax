@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IMD GRD Reader — Max Temperature</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Background grid -->
+  <div class="bg-grid"></div>
+  <!-- Glow orbs -->
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+
+  <div class="container">
+
+    <!-- ── HEADER ─────────────────────────────────────────── -->
+    <header class="site-header">
+      <div class="header-left">
+        <div class="header-logo">
+          <span class="logo-icon">🛰</span>
+          <div>
+            <h1>IMD <span class="accent">GRD</span> Reader</h1>
+            <p class="header-sub">India Meteorological Department · Gridded Rainfall Processor</p>
+          </div>
+        </div>
+      </div>
+      <div class="header-badges">
+        <span class="badge badge-blue">v1.0</span>
+        <span class="badge badge-green">1.0° Resolution</span>
+        <span class="badge badge-muted">WGS 1984</span>
+      </div>
+    </header>
+
+    <!-- ── UPLOAD ──────────────────────────────────────────── -->
+    <section class="upload-section" id="uploadZone">
+      <div class="upload-inner">
+        <div class="upload-icon-wrap">
+          <span class="upload-icon">🌡</span>
+          <div class="upload-icon-ring"></div>
+        </div>
+        <h2>Drop your IMD <span class="accent">.grd</span> file here</h2>
+        <p class="upload-hint">Binary float32 · 1.0° × 1.0° · Max Temperature Daily · Up to 500 MB</p>
+        <label class="btn btn-primary" for="fileInput">
+          📂 Browse File
+        </label>
+        <input type="file" id="fileInput" accept=".grd,.GRD" onchange="maxtempUploadFile()">
+        <div id="uploadStatus" class="upload-status"></div>
+      </div>
+    </section>
+
+    <!-- ── RESULTS ─────────────────────────────────────────── -->
+    <div id="resultsSection" style="display:none;">
+
+      <!-- top grid: metadata | stats | extent -->
+      <div class="info-grid">
+
+        <!-- Metadata -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📋 Metadata</span>
+          </div>
+          <div class="card-body">
+            <table class="data-table">
+              <tr><td>Columns</td>    <td id="ncols"></td></tr>
+              <tr><td>Rows</td>       <td id="nrows"></td></tr>
+              <tr><td>Cell Size</td>  <td id="cellsize"></td></tr>
+              <tr><td>X Lower Left</td><td id="xll"></td></tr>
+              <tr><td>Y Lower Left</td><td id="yll"></td></tr>
+            </table>
+          </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📊 Statistics</span>
+            <span class="card-badge">mm</span>
+          </div>
+          <div class="card-body">
+            <div class="stat-grid">
+              <div class="stat-item">
+                <div class="stat-label">Minimum</div>
+                <div class="stat-value" id="min">—</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-label">Maximum</div>
+                <div class="stat-value highlight" id="max">—</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-label">Mean</div>
+                <div class="stat-value" id="mean">—</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-label">Median</div>
+                <div class="stat-value" id="median">—</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-label">Std Dev</div>
+                <div class="stat-value" id="std">—</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-label">Valid Cells</div>
+                <div class="stat-value green" id="count">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Geographic Extent -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🗺 Geographic Extent</span>
+          </div>
+          <div class="card-body">
+            <div class="extent-map">
+              <div class="extent-row">
+                <span class="ext-label">Y Max</span>
+                <span class="ext-val accent" id="ymax">—</span>
+              </div>
+              <div class="extent-middle">
+                <div class="extent-col">
+                  <span class="ext-label">X Min</span>
+                  <span class="ext-val accent" id="xmin">—</span>
+                </div>
+                <div class="extent-india">🇮🇳</div>
+                <div class="extent-col" style="text-align:right;">
+                  <span class="ext-label">X Max</span>
+                  <span class="ext-val accent" id="xmax">—</span>
+                </div>
+              </div>
+              <div class="extent-row">
+                <span class="ext-label">Y Min</span>
+                <span class="ext-val accent" id="ymin">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /info-grid -->
+
+      <!-- ── EXPORT + QUERY row ──────────────────────────── -->
+      <div class="action-grid">
+
+        <!-- Export -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">💾 Export Data</span>
+          </div>
+          <div class="card-body">
+            <p class="section-hint">Select a format to download your processed data</p>
+            <div class="export-buttons">
+              <button class="btn btn-export" onclick="maxtempExportData('csv')">
+                <span class="btn-icon">📄</span>
+                <span class="btn-text">
+                  <strong>CSV</strong>
+                  <small>Lat · Lon · Rainfall</small>
+                </span>
+              </button>
+              <button class="btn btn-export" onclick="maxtempExportData('geotiff')">
+                <span class="btn-icon">🗺</span>
+                <span class="btn-text">
+                  <strong>GeoTIFF</strong>
+                  <small>Georeferenced raster</small>
+                </span>
+              </button>
+              <button class="btn btn-export" onclick="maxtempExportData('ascii')">
+                <span class="btn-icon">📝</span>
+                <span class="btn-text">
+                  <strong>ASCII Grid</strong>
+                  <small>ESRI Arc/Info .asc</small>
+                </span>
+              </button>
+              <button class="btn btn-export" onclick="maxtempExportData('stats')">
+                <span class="btn-icon">📊</span>
+                <span class="btn-text">
+                  <strong>Statistics CSV</strong>
+                  <small>Full summary table</small>
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Point Query -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📍 Query Point Value</span>
+          </div>
+          <div class="card-body">
+            <p class="section-hint">Enter coordinates to extract rainfall at a location</p>
+            <div class="query-inputs">
+              <div class="input-group">
+                <label class="input-label">Longitude (°E)</label>
+                <input class="input-field" type="number" id="longitude"
+                       placeholder="e.g. 77.20" step="0.01" min="66.5" max="100.25">
+              </div>
+              <div class="input-group">
+                <label class="input-label">Latitude (°N)</label>
+                <input class="input-field" type="number" id="latitude"
+                       placeholder="e.g. 28.60" step="0.01" min="6.5" max="38.75">
+              </div>
+              <button class="btn btn-primary query-btn" onclick="maxtempQueryPoint()">
+                🔍 Get Value
+              </button>
+            </div>
+            <div id="pointResult" class="point-result"></div>
+
+            <!-- Quick city shortcuts -->
+            <div class="city-shortcuts">
+              <span class="shortcut-label">Quick:</span>
+              <button class="city-btn" onclick="setCoords(77.20,28.60)">Delhi</button>
+              <button class="city-btn" onclick="setCoords(72.88,19.08)">Mumbai</button>
+              <button class="city-btn" onclick="setCoords(77.40,23.25)">Bhopal</button>
+              <button class="city-btn" onclick="setCoords(77.59,12.97)">Bengaluru</button>
+              <button class="city-btn" onclick="setCoords(85.83,20.29)">Bhubaneswar</button>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /action-grid -->
+
+    </div><!-- /resultsSection -->
+
+  </div><!-- /container -->
+
+  <!-- Geoportal Button — hidden until file uploaded -->
+  <div id="geoportal-btn-wrap">
+    <a id="geoportal-btn" href="#" style="display:none;">
+      <span class="geo-icon">🗺</span>
+      <span class="geo-text">
+        <strong>Open Geoportal</strong>
+        <small>Visualize · Analyze · Explore</small>
+      </span>
+      <span class="geo-arrow">→</span>
+    </a>
+  </div>
+
+  <footer class="site-footer">
+    <span>IMD GRD Reader · PhD Research · IIT Indore</span>
+    <span class="footer-sep">·</span>
+    <span>EPSG:4326 · WGS 1984</span>
+    <span class="footer-sep">·</span>
+    <span>0.25° × 0.25° Grid</span>
+  </footer>
+
+  <script src="js/maxtemp.js"></script>
+  <script>
+    // City shortcut helper
+    function setCoords(lon, lat) {
+      document.getElementById('longitude').value = lon;
+      document.getElementById('latitude').value  = lat;
+    }
+  </script>
+</body>
+</html>
